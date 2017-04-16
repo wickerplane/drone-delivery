@@ -1,6 +1,5 @@
 ;; global variables
 globals [
-    house-list ;;maybe?
     stop-list ;;maybe?
 ]
 
@@ -34,13 +33,6 @@ trucks-own [
 
 to setup
   clear-all
-  ;;randomly generate houses
-  generate-houses
-  ;; choose the houses that will be stops based on num-stops
-  generate-stops
-
-  ;; create the packages we want
-  setup-packages
 
   ;;divide up the patches based on max num trucks
   split-quadrants
@@ -49,6 +41,9 @@ to setup
 end
 
 to go
+  ;; choose the houses that will be stops based on num-stops; patch stuff
+  generate-stops
+
   ;; generate drones as needed up to max
   ;; based on a condition
   generate-drone
@@ -60,22 +55,12 @@ to go
   ;; ask all existing drones to move
   move-drone ;;carry singular packages for the drones
   ;; truck movement/delivery (inc speed consideration)
-  ask trucks [
   move-truck ;;carry mult packages for trucks
-
 
   ;;something with the cost- determine later
 end
 
 to split-quadrants
-
-end
-
-to generate-houses
-  ;; potentially do something with house-list
-end
-
-to setup-packages
 
 end
 
