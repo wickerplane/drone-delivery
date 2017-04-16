@@ -18,7 +18,6 @@ trucks-own [
 
 
 ;; sliders:
-;;  num-houses
 ;;  traffic-speed
 ;;  num-packages
 ;;  num-stops
@@ -33,6 +32,8 @@ trucks-own [
 
 to setup
   clear-all
+
+  ;;graphical things- put a thing at the center to represent the amazon center,
 
   ;;divide up the patches based on max num trucks
   split-quadrants
@@ -55,9 +56,7 @@ to go
   ;; ask all existing drones to move
   move-drone ;;carry singular packages for the drones
   ;; truck movement/delivery (inc speed consideration)
-  ask trucks [
   move-truck ;;carry mult packages for trucks
-
 
   ;;something with the cost- determine later
 end
@@ -66,15 +65,17 @@ to split-quadrants
 
 end
 
-to setup-packages
-
-end
-
+;;generates a single drone
 to generate-drone
-
+  create-drones 1 [
+    setxy 0 0 ;; puts it at the amazon center to begin with
+  ]
 end
 
 to generate-truck
+  create-trucks 1 [
+    setxy 0 0 ;; puts it at the amazon center to begin with
+  ]
 
 end
 
@@ -122,15 +123,109 @@ SLIDER
 28
 195
 61
-num-houses
-num-houses
+num-stops
+num-stops
 0
 100
-0.0
+42.0
 1
 1
 NIL
 HORIZONTAL
+
+SLIDER
+24
+70
+196
+103
+traffic-speed
+traffic-speed
+0
+100
+50.0
+1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+21
+120
+193
+153
+max-trucks
+max-trucks
+0
+100
+50.0
+1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+21
+167
+193
+200
+max-drones
+max-drones
+0
+100
+50.0
+1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+22
+214
+194
+247
+truck-capacity
+truck-capacity
+0
+100
+50.0
+1
+1
+NIL
+HORIZONTAL
+
+BUTTON
+39
+269
+102
+302
+NIL
+setup
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+BUTTON
+42
+327
+105
+360
+NIL
+go
+T
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+0
 
 @#$#@#$#@
 ## WHAT IS IT?
