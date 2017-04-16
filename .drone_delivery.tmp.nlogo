@@ -58,10 +58,12 @@ to go
   generate-truck
   ;; drone movement/delivery (inc speed consideration)
   ;; ask all existing drones to move
-  move-drone ;;carry singular packages for the drones
+  ask drones [
+    move-drone ;;carry singular packages for the drones
+  ]
   ;; truck movement/delivery (inc speed consideration)
   ask trucks [
-  move-truck ;;carry mult packages for trucks
+    move-truck ;;carry mult packages for trucks
 
 
   ;;something with the cost- determine later
