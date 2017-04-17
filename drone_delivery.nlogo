@@ -1,14 +1,15 @@
 ;; global variables
 globals [
     stop-list ;;maybe?
+    num-existing-drones
+    drone-waitlist
 ]
 
 breed [ drones drone ]
 breed [ trucks truck ]
 
 drones-own [
-  destination-x
-  destination-y
+  dest-stop
 ]
 
 trucks-own [
@@ -34,7 +35,9 @@ to setup
   clear-all
 
   ;;graphical things? like colors, an amazon center representation at middle
-ask patch 0 0 [set pcolor red]
+  ask patch 0 0 [set pcolor red]
+  set stop-list []
+  set drone-waitlist []
 
   ;;divide up the patches based on max num trucks
   split-quadrants
@@ -43,17 +46,19 @@ ask patch 0 0 [set pcolor red]
 end
 
 to go
-  ;; choose the houses that will be stops based on num-stops; patch stuff
-  generate-stops
 
-  ;; generate drones as needed up to max
-  ;; based on a condition
-  generate-drone
+  ;;potentially create a package
+  if (random-package) [
+    generate-stops
+    ;; generate drones as needed up to max
+    ;; based on a condition
+    ifelse (num-existing-drones < max-drones) [generate-drone]
+    [set drone-waitlist lput last stop-list drone-waitlist]
+  ]
 
   ;; generate trucks as needed up to max (don't send them out until capacity)
   ;;based on a condition
   generate-truck
-
 
 
   ;; drone movement/delivery (inc speed consideration)
@@ -75,6 +80,7 @@ to generate-drone
     setxy 0 0 ;; puts it at the amazon center to begin with
     set color blue
     set shape "airplane"
+    set dest-stop last stop-list
   ]
 end
 
@@ -94,13 +100,15 @@ to-report random-package
 end
 
 to generate-stops
-  if (random-package) [
-    set stop-list lput stop-list one-of patches
-  ]
+    set stop-list lput one-of patches stop-list
+    print stop-list
 end
 
 to move-drone
-
+  ask drones [
+    set heading towards dest-stop
+    forward 1 ;;edit with speed stuff
+  ]
 end
 
 to move-truck
