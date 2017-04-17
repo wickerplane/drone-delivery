@@ -34,6 +34,7 @@ to setup
   clear-all
 
   ;;graphical things? like colors, an amazon center representation at middle
+ask patch 0 0 [set pcolor red]
 
   ;;divide up the patches based on max num trucks
   split-quadrants
@@ -72,18 +73,30 @@ end
 to generate-drone
   create-drones 1 [
     setxy 0 0 ;; puts it at the amazon center to begin with
+    set color blue
+    set shape "airplane"
   ]
 end
 
 to generate-truck
   create-trucks 1 [
     setxy 0 0 ;; puts it at the amazon center to begin with
+    set color green
+    set shape "car"
   ]
 
 end
 
-to generate-stops
+to-report random-package
+  let prob false
+  ifelse (random 100 < package-prob) [set prob true] [set prob false]
+  report prob
+end
 
+to generate-stops
+  if (random-package) [
+    set stop-list lput stop-list one-of patches
+  ]
 end
 
 to move-drone
@@ -229,6 +242,21 @@ NIL
 NIL
 NIL
 0
+
+SLIDER
+35
+383
+207
+416
+package-prob
+package-prob
+0
+100
+50.0
+1
+1
+NIL
+HORIZONTAL
 
 @#$#@#$#@
 ## WHAT IS IT?
