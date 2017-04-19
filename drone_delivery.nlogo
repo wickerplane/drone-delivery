@@ -4,18 +4,25 @@ globals [
     num-existing-drones
     num-existing-trucks
     drone-waitlist
+    drone-times ;; list of time it took to deliver a drone package, for averaging
+    truck-times ;; list of time it took to deliver a truck package, for averaging
 ]
 
 breed [ drones drone ]
 breed [ trucks truck ]
 
 drones-own [
+  deliver-time
   dest-stop
+  speed
+  just-created
 ]
 
 trucks-own [
   area
   truck-stops
+  speed
+  just-created
 ]
 
 
@@ -40,6 +47,8 @@ to setup
   ask patch 0 0 [set pcolor red]
   set stop-list []
   set drone-waitlist []
+  set drone-times []
+  set truck-times []
   set num-existing-drones 0
   set num-existing-trucks 0
 
@@ -88,9 +97,11 @@ to generate-drone
   create-drones 1 [
     setxy 0 0 ;; puts it at the amazon center to begin with
     set color blue
+    set deliver-time 0
     set shape "airplane"
     set dest-stop last stop-list
     set num-existing-drones (num-existing-drones + 1)
+    set just-created true
   ]
 end
 
@@ -101,6 +112,7 @@ to generate-truck
     set shape "car"
     set truck-stops []
     set num-existing-trucks (num-existing-trucks + 1)
+    set just-created true
   ]
 
 end
@@ -112,7 +124,7 @@ to-report random-package
 end
 
 to generate-stops
-    let chosen-patch one-of patches
+    let chosen-patch one-of other patches
     set stop-list lput chosen-patch stop-list
     ask chosen-patch [
       set pcolor yellow
@@ -121,6 +133,7 @@ end
 
 to move-drone
   ask drones [
+    set speed (drone-speed / 100)
     if (patch-here = dest-stop) [
      print "reached"
      set dest-stop patch 0 0
@@ -129,8 +142,12 @@ to move-drone
      ]
     ]
     set heading towards dest-stop
-    forward 1 ;;edit with speed stuff
-    if (patch-here = patch 0 0) [
+    forward speed
+
+    if (patch-here != patch 0 0) [set just-created false]
+
+    set deliver-time (deliver-time + 1)
+    if (patch-here = patch 0 0 and not just-created) [
      set num-existing-drones (num-existing-drones - 1)
      die ;; edit with recharging later
     ]
@@ -139,6 +156,8 @@ end
 
 to move-truck
   ask trucks [
+    ;; adjust speed of truck based on traffic speed
+    set speed (traffic-speed / 100)
     ;; if patch-here is the first destination
        ;; set color to black if pink, gray otherwise
        ;; remove from own list of stops
@@ -146,10 +165,11 @@ to move-truck
 
     ;;set heading towards closest stop's x or y only to move in triangulated fashion
     ;;go forward 1
-    forward 1
+    forward speed
+    if (patch-here != patch 0 0) [set just-created false]
 
     ;; if this is the origin, die/recharge
-    if (patch-here = patch 0 0) [
+    if (patch-here = patch 0 0 and not just-created) [
       set num-existing-trucks (num-existing-trucks - 1)
       die ;; edit with recharging later
     ]
@@ -207,7 +227,7 @@ traffic-speed
 traffic-speed
 0
 100
-50.0
+12.0
 1
 1
 NIL
@@ -259,10 +279,10 @@ NIL
 HORIZONTAL
 
 BUTTON
-39
-269
-102
-302
+23
+445
+86
+478
 NIL
 setup
 NIL
@@ -276,10 +296,10 @@ NIL
 1
 
 BUTTON
-42
-327
-105
-360
+95
+445
+158
+478
 NIL
 go
 T
@@ -293,12 +313,27 @@ NIL
 0
 
 SLIDER
-35
-383
-207
-416
+22
+256
+194
+289
 package-prob
 package-prob
+0
+100
+50.0
+1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+24
+301
+196
+334
+drone-speed
+drone-speed
 0
 100
 50.0
