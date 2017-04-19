@@ -2,6 +2,7 @@
 globals [
     stop-list ;;maybe?
     num-existing-drones
+    num-existing-trucks
     drone-waitlist
 ]
 
@@ -13,6 +14,7 @@ drones-own [
 ]
 
 trucks-own [
+  area
   truck-stops
 ]
 
@@ -38,6 +40,8 @@ to setup
   ask patch 0 0 [set pcolor red]
   set stop-list []
   set drone-waitlist []
+  set num-existing-drones 0
+  set num-existing-trucks 0
 
   ;;divide up the patches based on max num trucks
   split-quadrants
@@ -47,6 +51,7 @@ end
 
 to go
 
+
   ;;potentially create a package
   if (random-package) [
     generate-stops
@@ -54,11 +59,15 @@ to go
     ;; based on a condition
     ifelse (num-existing-drones < max-drones) [generate-drone]
     [set drone-waitlist lput last stop-list drone-waitlist]
+
+
+    ;; generate trucks as needed up to max (don't send them out until capacity)
+    ;;based on a condition- check if a truck already exists heading to this area
+    ifelse (num-existing-trucks < max-trucks) [generate-truck] []
+    ;;add the new package to a truck's stop list
   ]
 
-  ;; generate trucks as needed up to max (don't send them out until capacity)
-  ;;based on a condition
-  generate-truck
+
 
 
   ;; drone movement/delivery (inc speed consideration)
@@ -81,6 +90,7 @@ to generate-drone
     set color blue
     set shape "airplane"
     set dest-stop last stop-list
+    set num-existing-drones (num-existing-drones + 1)
   ]
 end
 
@@ -89,6 +99,8 @@ to generate-truck
     setxy 0 0 ;; puts it at the amazon center to begin with
     set color green
     set shape "car"
+    set truck-stops []
+    set num-existing-trucks (num-existing-trucks + 1)
   ]
 
 end
@@ -100,19 +112,48 @@ to-report random-package
 end
 
 to generate-stops
-    set stop-list lput one-of patches stop-list
-    print stop-list
+    let chosen-patch one-of patches
+    set stop-list lput chosen-patch stop-list
+    ask chosen-patch [
+      set pcolor yellow
+    ]
 end
 
 to move-drone
   ask drones [
+    if (patch-here = dest-stop) [
+     print "reached"
+     set dest-stop patch 0 0
+     ask patch-here [
+       ifelse (pcolor = gray) [set pcolor black][set pcolor pink]
+     ]
+    ]
     set heading towards dest-stop
     forward 1 ;;edit with speed stuff
+    if (patch-here = patch 0 0) [
+     set num-existing-drones (num-existing-drones - 1)
+     die ;; edit with recharging later
+    ]
   ]
 end
 
 to move-truck
+  ask trucks [
+    ;; if patch-here is the first destination
+       ;; set color to black if pink, gray otherwise
+       ;; remove from own list of stops
+       ;; if no more destinations, go back to origin
 
+    ;;set heading towards closest stop's x or y only to move in triangulated fashion
+    ;;go forward 1
+    forward 1
+
+    ;; if this is the origin, die/recharge
+    if (patch-here = patch 0 0) [
+      set num-existing-trucks (num-existing-trucks - 1)
+      die ;; edit with recharging later
+    ]
+  ]
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
@@ -180,8 +221,8 @@ SLIDER
 max-trucks
 max-trucks
 0
-100
-50.0
+20
+10.0
 1
 1
 NIL
@@ -210,8 +251,8 @@ SLIDER
 truck-capacity
 truck-capacity
 0
-100
-50.0
+20
+10.0
 1
 1
 NIL
