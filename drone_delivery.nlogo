@@ -4,9 +4,11 @@ globals [
     num-existing-drones
     num-existing-trucks
     drone-waitlist
+    truck-waitlist
     drone-times ;; list of time it took to deliver a drone package, for averaging
     truck-times ;; list of time it took to deliver a truck package, for averaging
-
+    quadrant-num
+    num-stops
 ]
 
 breed [ drones drone ]
@@ -24,6 +26,7 @@ trucks-own [
   truck-stops
   speed
   just-created
+  current-index
 ]
 
 
@@ -48,10 +51,13 @@ to setup
   ask patch 0 0 [set pcolor red]
   set stop-list []
   set drone-waitlist []
+  set truck-waitlist []
   set drone-times []
   set truck-times []
   set num-existing-drones 0
   set num-existing-trucks 0
+  set quadrant-num 0
+  set num-stops 0
 
   ;;divide up the patches based on max num trucks
   split-quadrants
@@ -63,7 +69,9 @@ to go
 
 
   ;;potentially create a package
+;if (num-stops < max-stops)[
   if (random-package) [
+    set num-stops num-stops + 1
     generate-stops
     ;; generate drones as needed up to max
     ;; based on a condition
@@ -73,23 +81,93 @@ to go
 
     ;; generate trucks as needed up to max (don't send them out until capacity)
     ;;based on a condition- check if a truck already exists heading to this area
-    ifelse (num-existing-trucks < max-trucks) [generate-truck] []
+    if(num-existing-trucks < max-trucks) [generate-truck]
+
     ;;add the new package to a truck's stop list
+    let package last stop-list
+    assign-package (package)
+
+    ;;TODO: deal with truck waitlist
+    print word "truck waitlist " length truck-waitlist
+    print word "drone waitlist " length drone-waitlist
   ]
-
-
-
+;]
 
   ;; drone movement/delivery (inc speed consideration)
   ;; ask all existing drones to move
   move-drone ;;carry singular packages for the drones
   ;; truck movement/delivery (inc speed consideration)
-  move-truck ;;carry mult packages for trucks
+  ask trucks [
+     ifelse (length truck-stops / truck-capacity >= 0.7)  [
+       move-truck
+;       print length truck-stops
+     ] [
+;       print "truck not full enough"
+;       print length truck-stops
+       ];;carry mult packages for trucks
+  ]
 
   ;;something with the cost- determine later
 end
 
 to split-quadrants
+
+end
+
+;;package is a patch here
+to assign-package [package]
+  let assigned false
+  ask package [
+    if (pxcor >= 0 and pycor >= 0) [
+      ask trucks [
+        if (area mod 4 = 0 and not assigned) [
+          ifelse (length truck-stops <= truck-capacity and xcor = 0 and ycor = 0) [
+            set truck-stops lput package truck-stops
+            set assigned true
+          ] [
+            set truck-waitlist lput package truck-waitlist
+          ]
+        ]
+
+      ]
+    ]
+    if (pxcor < 0 and pycor >= 0) [
+      ask trucks [
+        if (area mod 4 = 1 and not assigned) [
+          ifelse (length truck-stops <= truck-capacity and xcor = 0 and ycor = 0) [
+            set truck-stops lput package truck-stops
+            set assigned true
+          ] [
+            set truck-waitlist lput package truck-waitlist
+          ]
+        ]
+      ]
+    ]
+    if (pxcor >= 0 and pycor < 0) [
+      ask trucks [
+        if (area mod 4 = 2 and not assigned) [
+          ifelse (length truck-stops <= truck-capacity and xcor = 0 and ycor = 0) [
+            set truck-stops lput package truck-stops
+            set assigned true
+          ] [
+            set truck-waitlist lput package truck-waitlist
+          ]
+        ]
+      ]
+    ]
+    if (pxcor < 0 and pycor < 0) [
+      ask trucks [
+        if (area mod 4 = 3 and not assigned) [
+         ifelse (length truck-stops <= truck-capacity and xcor = 0 and ycor = 0) [
+            set truck-stops lput package truck-stops
+            set assigned true
+          ] [
+            set truck-waitlist lput package truck-waitlist
+          ]
+        ]
+      ]
+    ]
+  ]
 
 end
 
@@ -114,6 +192,12 @@ to generate-truck
     set truck-stops []
     set num-existing-trucks (num-existing-trucks + 1)
     set just-created true
+    set area quadrant-num
+    if (quadrant-num >= max-trucks - 1) [
+      set quadrant-num -1
+    ]
+    set quadrant-num quadrant-num + 1
+    set current-index 0
   ]
 
 end
@@ -136,10 +220,12 @@ to move-drone
   ask drones [
     set speed (drone-speed / 100)
     if (patch-here = dest-stop) [
-     print "reached"
      set dest-stop patch 0 0
      ask patch-here [
-       ifelse (pcolor = gray) [set pcolor black][set pcolor pink]
+       ifelse (pcolor = gray) [
+         set pcolor black
+         set num-stops num-stops - 1
+       ][set pcolor pink]
      ]
     ]
 
@@ -163,7 +249,7 @@ to move-drone
 end
 
 to move-truck
-  ask trucks [
+
     ;; adjust speed of truck based on traffic speed
     set speed (traffic-speed / 100)
     ;; if patch-here is the first destination
@@ -172,16 +258,54 @@ to move-truck
        ;; if no more destinations, go back to origin
 
     ;;set heading towards closest stop's x or y only to move in triangulated fashion
-    ;;go forward 1
+let current-stop patch 0 0
+ifelse (current-index >= length truck-stops) [
+  set current-stop patch 0 0
+  set heading towards current-stop
+][
+
+  set current-stop item current-index truck-stops
+  let x-direction 0
+  let y-direction 0
+  ask current-stop [
+    set x-direction pxcor
+    set y-direction pycor
+  ]
+  let curr-x 0
+  let curr-y 0
+  ask patch-here [
+    set curr-x pxcor
+    set curr-y pycor
+  ]
+  ifelse (curr-x != x-direction) [
+    set heading towards patch x-direction curr-y
+  ] [
+    ifelse (curr-y != y-direction) [
+      set heading towards patch x-direction y-direction
+    ] [
+      ;;package delivered
+      ask patch-here [
+       ifelse (pcolor = pink) [
+         set pcolor black
+         set num-stops num-stops - 1
+       ][set pcolor gray]
+     ]
+      set current-index current-index + 1
+    ]
+  ]
+]
+    ;;go forward based on speed
     forward speed
     if (patch-here != patch 0 0) [set just-created false]
 
     ;; if this is the origin, die/recharge
     if (patch-here = patch 0 0 and not just-created) [
+      set truck-stops []
       set num-existing-trucks (num-existing-trucks - 1)
       die ;; edit with recharging later
     ]
-  ]
+
+
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
@@ -216,11 +340,11 @@ SLIDER
 28
 195
 61
-num-stops
-num-stops
-0
-100
-42.0
+max-stops
+max-stops
+50
+300
+208.0
 1
 1
 NIL
@@ -234,8 +358,8 @@ SLIDER
 traffic-speed
 traffic-speed
 0
-100
-12.0
+80
+56.0
 1
 1
 NIL
@@ -250,7 +374,7 @@ max-trucks
 max-trucks
 0
 20
-10.0
+16.0
 1
 1
 NIL
@@ -280,7 +404,7 @@ truck-capacity
 truck-capacity
 0
 20
-10.0
+8.0
 1
 1
 NIL
@@ -343,9 +467,9 @@ SLIDER
 drone-speed
 drone-speed
 0
-100
-50.0
-1
+20
+13.5
+0.5
 1
 NIL
 HORIZONTAL
