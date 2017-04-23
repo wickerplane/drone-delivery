@@ -144,7 +144,9 @@ to move-drone
     ]
 
     ;; error checking
-    if (dest-stop = patch 0 0) [die]
+    if (dest-stop = patch 0 0 and just-created) [
+      die
+    ]
 
 
     set heading towards dest-stop
