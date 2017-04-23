@@ -6,6 +6,7 @@ globals [
     drone-waitlist
     drone-times ;; list of time it took to deliver a drone package, for averaging
     truck-times ;; list of time it took to deliver a truck package, for averaging
+
 ]
 
 breed [ drones drone ]
@@ -141,6 +142,11 @@ to move-drone
        ifelse (pcolor = gray) [set pcolor black][set pcolor pink]
      ]
     ]
+
+    ;; error checking
+    if (dest-stop = patch 0 0) [die]
+
+
     set heading towards dest-stop
     forward speed
 
