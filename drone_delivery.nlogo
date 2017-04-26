@@ -4,7 +4,9 @@ globals [
     num-existing-drones
     num-existing-trucks
     drone-waitlist
+    drone-waittimes
     truck-waitlist
+    truck-waittimes
     drone-times ;; list of time it took to deliver a drone package, for averaging
     truck-times ;; list of time it took to deliver a truck package, for averaging
     quadrant-num
@@ -19,9 +21,14 @@ drones-own [
   dest-stop
   speed
   just-created
+  total-distance
 ]
 
 trucks-own [
+  waitlist-time
+  update-fixed-time-cost
+  total-distance
+  total-time
   area
   truck-stops
   speed
@@ -52,6 +59,8 @@ to setup
   set stop-list []
   set drone-waitlist []
   set truck-waitlist []
+  set drone-waittimes []
+  set truck-waittimes []
   set drone-times []
   set truck-times []
   set num-existing-drones 0
@@ -76,7 +85,10 @@ to go
     ;; generate drones as needed up to max
     ;; based on a condition
     ifelse (num-existing-drones < max-drones) [generate-drone]
-    [set drone-waitlist lput last stop-list drone-waitlist]
+    [
+      set drone-waitlist lput last stop-list drone-waitlist
+      set drone-waittimes lput 0 drone-waittimes
+    ]
 
 
     ;; generate trucks as needed up to max (don't send them out until capacity)
@@ -87,10 +99,12 @@ to go
     let package last stop-list
     assign-package (package)
 
-    ;;TODO: deal with truck waitlist
-    print word "truck waitlist " length truck-waitlist
-    print word "drone waitlist " length drone-waitlist
+;    print word "truck waitlist " length truck-waitlist
+;    print word "drone waitlist " length drone-waitlist
   ]
+
+   assign-from-waitlist
+   assign-drone-waitlist
 ;]
 
   ;; drone movement/delivery (inc speed consideration)
@@ -98,16 +112,25 @@ to go
   move-drone ;;carry singular packages for the drones
   ;; truck movement/delivery (inc speed consideration)
   ask trucks [
-     ifelse (length truck-stops / truck-capacity >= 0.7)  [
+     if (length truck-stops / truck-capacity >= truck-delivery-threshold)  [
        move-truck
 ;       print length truck-stops
-     ] [
-;       print "truck not full enough"
-;       print length truck-stops
-       ];;carry mult packages for trucks
+     ]
   ]
 
+  update-waits
+
+
+
   ;;something with the cost- determine later
+
+  ;;run plots
+;if (length drone-times != 0) [
+;  plot average-drone-time
+;  plot average-truck-time
+;]
+;if (length truck-times != 0) [plot average-truck-time]
+   tick
 end
 
 to split-quadrants
@@ -117,57 +140,177 @@ end
 ;;package is a patch here
 to assign-package [package]
   let assigned false
+
+  ;;increment for fixed time cost of loading
+  ask trucks-on patch 0 0 [
+    set total-time total-time + 1
+  ]
+
   ask package [
     if (pxcor >= 0 and pycor >= 0) [
       ask trucks [
         if (area mod 4 = 0 and not assigned) [
-          ifelse (length truck-stops <= truck-capacity and xcor = 0 and ycor = 0) [
+          if(length truck-stops <= truck-capacity and xcor = 0 and ycor = 0) [
             set truck-stops lput package truck-stops
             set assigned true
-          ] [
-            set truck-waitlist lput package truck-waitlist
           ]
         ]
-
+      ]
+      if (not assigned)[
+        set truck-waitlist lput package truck-waitlist
+        set truck-waittimes lput 0 truck-waittimes
       ]
     ]
     if (pxcor < 0 and pycor >= 0) [
       ask trucks [
         if (area mod 4 = 1 and not assigned) [
-          ifelse (length truck-stops <= truck-capacity and xcor = 0 and ycor = 0) [
+          if (length truck-stops <= truck-capacity and xcor = 0 and ycor = 0) [
             set truck-stops lput package truck-stops
             set assigned true
-          ] [
-            set truck-waitlist lput package truck-waitlist
           ]
         ]
+      ]
+      if (not assigned)[
+        set truck-waitlist lput package truck-waitlist
+        set truck-waittimes lput 0 truck-waittimes
       ]
     ]
     if (pxcor >= 0 and pycor < 0) [
       ask trucks [
         if (area mod 4 = 2 and not assigned) [
-          ifelse (length truck-stops <= truck-capacity and xcor = 0 and ycor = 0) [
+          if (length truck-stops <= truck-capacity and xcor = 0 and ycor = 0) [
             set truck-stops lput package truck-stops
             set assigned true
-          ] [
-            set truck-waitlist lput package truck-waitlist
           ]
         ]
+      ]
+       if (not assigned)[
+        set truck-waitlist lput package truck-waitlist
+        set truck-waittimes lput 0 truck-waittimes
       ]
     ]
     if (pxcor < 0 and pycor < 0) [
       ask trucks [
         if (area mod 4 = 3 and not assigned) [
-         ifelse (length truck-stops <= truck-capacity and xcor = 0 and ycor = 0) [
+         if (length truck-stops <= truck-capacity and xcor = 0 and ycor = 0) [
             set truck-stops lput package truck-stops
             set assigned true
-          ] [
-            set truck-waitlist lput package truck-waitlist
+          ]
+        ]
+      ]
+      if (not assigned)[
+        set truck-waitlist lput package truck-waitlist
+        set truck-waittimes lput 0 truck-waittimes
+      ]
+    ]
+  ]
+
+end
+
+;;essentially if there are packages in the waitlist, try to assign them to trucks/drones to send them out
+to assign-from-waitlist
+  let index 0
+  let trucks-waiting trucks-on patch 0 0
+;  ask trucks [
+;    if (patch-here = patch 0 0) [
+;      set trucks-waiting lput self trucks-waiting
+;    ]
+;  ]
+  let assigned false
+  foreach truck-waitlist [
+    [package] ->
+
+    ask package [
+       set assigned false
+    if (pxcor >= 0 and pycor >= 0) [
+      ask trucks-waiting [
+        if (area mod 4 = 0 and not assigned) [
+          if(length truck-stops <= truck-capacity) [
+            set truck-stops lput package truck-stops
+            set assigned true
+            ;;update wait time for truck
+            let waittime item index truck-waittimes
+;            print word "what is waittime " waittime
+            set waitlist-time waitlist-time + waittime
+;            print word "updated waitlist-time " waitlist-time
+          ]
+        ]
+      ]
+    ]
+    if (pxcor < 0 and pycor >= 0) [
+      ask trucks-waiting [
+        if (area mod 4 = 1 and not assigned) [
+          if (length truck-stops <= truck-capacity) [
+            set truck-stops lput package truck-stops
+            set assigned true
+             ;;update wait time for truck
+            let waittime item index truck-waittimes
+            set waitlist-time waitlist-time + waittime
+          ]
+        ]
+      ]
+    ]
+    if (pxcor >= 0 and pycor < 0) [
+      ask trucks-waiting [
+        if (area mod 4 = 2 and not assigned) [
+          if (length truck-stops <= truck-capacity) [
+            set truck-stops lput package truck-stops
+            set assigned true
+             ;;update wait time for truck
+            let waittime item index truck-waittimes
+            set waitlist-time waitlist-time + waittime
+          ]
+        ]
+      ]
+    ]
+    if (pxcor < 0 and pycor < 0) [
+      ask trucks-waiting [
+        if (area mod 4 = 3 and not assigned) [
+         if (length truck-stops <= truck-capacity) [
+            set truck-stops lput package truck-stops
+            set assigned true
+             ;;update wait time for truck
+            let waittime item index truck-waittimes
+            set waitlist-time waitlist-time + waittime
           ]
         ]
       ]
     ]
   ]
+    if (assigned) [;;remove from waitlist
+            set truck-waitlist remove-item index truck-waitlist
+            set truck-waittimes remove-item index truck-waittimes
+            set index index - 1
+    ]
+
+    set index index + 1
+  ]
+end
+
+to assign-drone-waitlist
+  let index 0
+    foreach drone-waitlist [
+      [package] ->
+        ifelse (num-existing-drones < max-drones) [
+            create-drones 1 [
+              setxy 0 0 ;; puts it at the amazon center to begin with
+              set color blue
+              set deliver-time item index drone-waittimes
+              set shape "airplane"
+              set dest-stop package
+              set num-existing-drones (num-existing-drones + 1)
+              set just-created true
+              set total-distance 0.0
+            ]
+            ;;remove from waitlist
+            set drone-waitlist remove-item index drone-waitlist
+            set drone-waittimes remove-item index drone-waittimes
+            set index index - 1
+
+        ]    [stop]
+
+     set index index + 1
+    ]
 
 end
 
@@ -181,6 +324,7 @@ to generate-drone
     set dest-stop last stop-list
     set num-existing-drones (num-existing-drones + 1)
     set just-created true
+    set total-distance 0.0
   ]
 end
 
@@ -198,6 +342,10 @@ to generate-truck
     ]
     set quadrant-num quadrant-num + 1
     set current-index 0
+    set total-distance 0.0
+    set total-time 0
+    set update-fixed-time-cost true
+    set waitlist-time 0
   ]
 
 end
@@ -216,9 +364,31 @@ to generate-stops
     ]
 end
 
+;to replace-stuff [anumber alist aninput]
+;  replace-item anumber alist aninput
+;
+;end
+
+to update-waits
+;  print word "length of truck wait times list: " length truck-waittimes
+ let index 0
+  foreach drone-waittimes [
+    [x] ->
+      set drone-waittimes replace-item index drone-waittimes (x + 1)
+      set index (index + 1)
+  ]
+  set index 0
+  foreach truck-waittimes [
+    [x] ->
+      set truck-waittimes replace-item index truck-waittimes (x + 1)
+      set index (index + 1)
+;    print x
+  ]
+end
+
 to move-drone
   ask drones [
-    set speed (drone-speed / 100)
+    set speed 0.134
     if (patch-here = dest-stop) [
      set dest-stop patch 0 0
      ask patch-here [
@@ -237,12 +407,15 @@ to move-drone
 
     set heading towards dest-stop
     forward speed
+    set total-distance total-distance + speed
 
     if (patch-here != patch 0 0) [set just-created false]
 
     set deliver-time (deliver-time + 1)
     if (patch-here = patch 0 0 and not just-created) [
      set num-existing-drones (num-existing-drones - 1)
+      set drone-times lput (deliver-time / 2) drone-times
+;     print word word who " drone " total-distance
      die ;; edit with recharging later
     ]
   ]
@@ -258,10 +431,24 @@ to move-truck
        ;; if no more destinations, go back to origin
 
     ;;set heading towards closest stop's x or y only to move in triangulated fashion
+if update-fixed-time-cost [
+  set update-fixed-time-cost false
+  set total-time (total-time * (length truck-stops))
+]
+
 let current-stop patch 0 0
 ifelse (current-index >= length truck-stops) [
-  set current-stop patch 0 0
-  set heading towards current-stop
+  let curr-x 0
+  let curr-y 0
+  ask patch-here [
+    set curr-x pxcor
+    set curr-y pycor
+  ]
+  ifelse (curr-x != 0) [
+    set heading towards patch 0 curr-y
+  ] [
+    set heading towards patch 0 0
+  ]
 ][
 
   set current-stop item current-index truck-stops
@@ -296,16 +483,33 @@ ifelse (current-index >= length truck-stops) [
 ]
     ;;go forward based on speed
     forward speed
+    set total-distance total-distance + speed
+    set total-time total-time + 1
+
     if (patch-here != patch 0 0) [set just-created false]
 
     ;; if this is the origin, die/recharge
     if (patch-here = patch 0 0 and not just-created) [
+;      print word word who " truck " total-distance
+      let average-time 0
+;      print word "total waitlist time for truck was " waitlist-time
+      set total-time total-time + waitlist-time
+      set average-time total-time / (length truck-stops)
+      set truck-times lput average-time truck-times
       set truck-stops []
       set num-existing-trucks (num-existing-trucks - 1)
       die ;; edit with recharging later
     ]
+end
 
+to-report average-drone-time
+  ifelse (length drone-times = 0) [report 0]
+  [ report mean drone-times]
+end
 
+to-report average-truck-time
+  ifelse (length truck-times = 0) [report 0]
+  [report mean truck-times]
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
@@ -359,7 +563,7 @@ traffic-speed
 traffic-speed
 0
 80
-56.0
+46.0
 1
 1
 NIL
@@ -372,9 +576,9 @@ SLIDER
 153
 max-trucks
 max-trucks
-0
-20
-16.0
+5
+40
+34.0
 1
 1
 NIL
@@ -387,9 +591,9 @@ SLIDER
 200
 max-drones
 max-drones
-0
-100
-50.0
+10
+200
+155.0
 1
 1
 NIL
@@ -402,9 +606,9 @@ SLIDER
 247
 truck-capacity
 truck-capacity
-0
-20
-8.0
+10
+40
+15.0
 1
 1
 NIL
@@ -453,26 +657,67 @@ package-prob
 package-prob
 0
 100
-50.0
+48.0
 1
 1
 NIL
 HORIZONTAL
 
 SLIDER
-24
+13
 301
-196
+200
 334
-drone-speed
-drone-speed
+truck-delivery-threshold
+truck-delivery-threshold
 0
-20
-13.5
-0.5
+1
+0.7
+0.05
 1
 NIL
 HORIZONTAL
+
+PLOT
+680
+39
+945
+235
+Average Delivery Times
+Ticks
+Average truck delivery time
+0.0
+10.0
+0.0
+10.0
+true
+false
+"" ""
+PENS
+"pen-1" 1.0 0 -2674135 true "" "plot average-drone-time"
+"pen-2" 1.0 0 -13840069 true "" "plot average-truck-time"
+
+MONITOR
+683
+276
+857
+321
+Average Drone Delivery Time
+average-drone-time
+5
+1
+11
+
+MONITOR
+682
+324
+853
+369
+Average Truck Delivery Time
+average-truck-time
+5
+1
+11
 
 @#$#@#$#@
 ## WHAT IS IT?
