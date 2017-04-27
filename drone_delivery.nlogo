@@ -10,6 +10,7 @@ globals [
     drone-times ;; list of time it took to deliver a drone package, for averaging
     truck-times ;; list of time it took to deliver a truck package, for averaging
     quadrant-num
+    drone-rechargelist
     num-stops
 ]
 
@@ -63,18 +64,19 @@ to setup
   set truck-waittimes []
   set drone-times []
   set truck-times []
+  set drone-rechargelist []
   set num-existing-drones 0
   set num-existing-trucks 0
   set quadrant-num 0
   set num-stops 0
 
-  ;;divide up the patches based on max num trucks
-  split-quadrants
 
   reset-ticks
 end
 
 to go
+
+   recharge-drones
 
 
   ;;potentially create a package
@@ -82,12 +84,16 @@ to go
   if (random-package) [
     set num-stops num-stops + 1
     generate-stops
+
+
     ;; generate drones as needed up to max
     ;; based on a condition
-    ifelse (num-existing-drones < max-drones) [generate-drone]
+
+    ifelse ((num-existing-drones + length drone-rechargelist) < max-drones) [generate-drone]
     [
       set drone-waitlist lput last stop-list drone-waitlist
       set drone-waittimes lput 0 drone-waittimes
+;      print word "drones recharging: " length drone-rechargelist
     ]
 
 
@@ -133,7 +139,17 @@ to go
    tick
 end
 
-to split-quadrants
+to recharge-drones
+  let index 0
+  foreach drone-rechargelist [
+    [x] ->
+     set drone-rechargelist replace-item index drone-rechargelist (x - (1 / 2.133333))
+     if (x <= 0) [
+       set drone-rechargelist remove-item index drone-rechargelist
+       set index index - 1
+     ]
+     set index index + 1
+  ]
 
 end
 
@@ -143,7 +159,7 @@ to assign-package [package]
 
   ;;increment for fixed time cost of loading
   ask trucks-on patch 0 0 [
-    set total-time total-time + 1
+    set total-time total-time + (1 / 2.133333)
   ]
 
   ask package [
@@ -291,7 +307,7 @@ to assign-drone-waitlist
   let index 0
     foreach drone-waitlist [
       [package] ->
-        ifelse (num-existing-drones < max-drones) [
+        ifelse ((num-existing-drones + length drone-rechargelist) < max-drones) [
             create-drones 1 [
               setxy 0 0 ;; puts it at the amazon center to begin with
               set color blue
@@ -319,7 +335,7 @@ to generate-drone
   create-drones 1 [
     setxy 0 0 ;; puts it at the amazon center to begin with
     set color blue
-    set deliver-time 0
+    set deliver-time 0.0
     set shape "airplane"
     set dest-stop last stop-list
     set num-existing-drones (num-existing-drones + 1)
@@ -343,9 +359,9 @@ to generate-truck
     set quadrant-num quadrant-num + 1
     set current-index 0
     set total-distance 0.0
-    set total-time 0
+    set total-time 0.0
     set update-fixed-time-cost true
-    set waitlist-time 0
+    set waitlist-time 0.0
   ]
 
 end
@@ -374,13 +390,13 @@ to update-waits
  let index 0
   foreach drone-waittimes [
     [x] ->
-      set drone-waittimes replace-item index drone-waittimes (x + 1)
+      set drone-waittimes replace-item index drone-waittimes (x + (1 / 2.133333))
       set index (index + 1)
   ]
   set index 0
   foreach truck-waittimes [
     [x] ->
-      set truck-waittimes replace-item index truck-waittimes (x + 1)
+      set truck-waittimes replace-item index truck-waittimes (x + (1 / 2.133333))
       set index (index + 1)
 ;    print x
   ]
@@ -411,11 +427,12 @@ to move-drone
 
     if (patch-here != patch 0 0) [set just-created false]
 
-    set deliver-time (deliver-time + 1)
+    set deliver-time (deliver-time + (1 / 2.133333))
     if (patch-here = patch 0 0 and not just-created) [
      set num-existing-drones (num-existing-drones - 1)
       set drone-times lput (deliver-time / 2) drone-times
 ;     print word word who " drone " total-distance
+      set drone-rechargelist lput drone-recharge-time drone-rechargelist
      die ;; edit with recharging later
     ]
   ]
@@ -484,7 +501,7 @@ ifelse (current-index >= length truck-stops) [
     ;;go forward based on speed
     forward speed
     set total-distance total-distance + speed
-    set total-time total-time + 1
+    set total-time total-time + (1 / 2.133333)
 
     if (patch-here != patch 0 0) [set just-created false]
 
@@ -504,12 +521,13 @@ end
 
 to-report average-drone-time
   ifelse (length drone-times = 0) [report 0]
-  [ report mean drone-times]
+  ;; convert to actual time in minutes
+  [ report (mean drone-times) * 0.6]
 end
 
 to-report average-truck-time
   ifelse (length truck-times = 0) [report 0]
-  [report mean truck-times]
+  [report (mean truck-times) * 0.6]
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
@@ -561,9 +579,9 @@ SLIDER
 103
 traffic-speed
 traffic-speed
-0
-80
-46.0
+10
+75
+33.0
 1
 1
 NIL
@@ -578,7 +596,7 @@ max-trucks
 max-trucks
 5
 40
-34.0
+38.0
 1
 1
 NIL
@@ -592,8 +610,8 @@ SLIDER
 max-drones
 max-drones
 10
-200
-155.0
+400
+355.0
 1
 1
 NIL
@@ -608,7 +626,7 @@ truck-capacity
 truck-capacity
 10
 40
-15.0
+25.0
 1
 1
 NIL
@@ -657,7 +675,7 @@ package-prob
 package-prob
 0
 100
-48.0
+97.0
 1
 1
 NIL
@@ -672,7 +690,7 @@ truck-delivery-threshold
 truck-delivery-threshold
 0
 1
-0.7
+0.6
 0.05
 1
 NIL
@@ -718,6 +736,21 @@ average-truck-time
 5
 1
 11
+
+SLIDER
+30
+349
+202
+382
+drone-recharge-time
+drone-recharge-time
+0
+50
+30.0
+1
+1
+NIL
+HORIZONTAL
 
 @#$#@#$#@
 ## WHAT IS IT?
